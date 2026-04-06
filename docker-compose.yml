@@ -1,0 +1,30 @@
+version: "3.8"
+
+services:
+  n8n:
+    image: n8nio/n8n:1.85.4
+    container_name: n8n_stable
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_BASIC_AUTH_ACTIVE=true
+      - N8N_BASIC_AUTH_USER=${N8N_BASIC_AUTH_USER}
+      - N8N_BASIC_AUTH_PASSWORD=${N8N_BASIC_AUTH_PASSWORD}
+      - TZ=Asia/Tokyo
+    env_file:
+      - .env
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./n8n-workflows:/workflows
+      - ./config:/config
+      - ./obsidian-vault:/obsidian
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider",
+             "http://localhost:5678"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  n8n_data:

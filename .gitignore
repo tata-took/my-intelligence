@@ -1,0 +1,16 @@
+# APIキー・パスワードは絶対にGitHubに上げない
+.env
+
+# n8nのデータベース（設定JSONのみGit管理）
+.n8n/database.sqlite
+.n8n/nodes/
+
+# Obsidianのシステムファイル
+obsidian-vault/.obsidian/workspace
+obsidian-vault/.obsidian/workspace.json
+obsidian-vault/.obsidian/workspace.json.bak
+obsidian-vault/.trash/
+
+# Windowsのゴミファイル
+Thumbs.db
+desktop.ini
