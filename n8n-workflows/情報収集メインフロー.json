@@ -1,0 +1,295 @@
+{
+  "name": "情報収集メインフロー",
+  "nodes": [
+    {
+      "parameters": {
+        "url": "https://zenn.dev/feed",
+        "options": {}
+      },
+      "id": "91a93c5f-4ca6-4ce1-930f-f5d0acb6d155",
+      "name": "Zenn",
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1,
+      "position": [
+        -992,
+        -432
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://qiita.com/popular-items/feed",
+        "options": {}
+      },
+      "id": "e62c95ce-985e-4bd5-a643-82adfaaba2e9",
+      "name": "Qiita",
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1,
+      "position": [
+        -992,
+        -240
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://techcrunch.com/feed/",
+        "options": {}
+      },
+      "id": "e37184ad-794e-4959-b827-8273db721e84",
+      "name": "TechCrunch",
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1,
+      "position": [
+        -992,
+        -48
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://hnrss.org/frontpage",
+        "options": {}
+      },
+      "id": "e5134f4a-1726-4190-a397-2db4340be292",
+      "name": "HackerNews",
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1,
+      "position": [
+        -992,
+        144
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://feeds.feedburner.com/TheHackersNews",
+        "options": {}
+      },
+      "id": "6b27ea44-f309-49b0-b24a-557e0393ebcf",
+      "name": "TheHackersNews",
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1,
+      "position": [
+        -992,
+        336
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "multiplex",
+        "options": {}
+      },
+      "id": "25e09b4a-6e01-498e-bd29-1b5e68045ee3",
+      "name": "全RSS統合",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2,
+      "position": [
+        -768,
+        -48
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// 記事データを整形する\nconst items = $input.all();\nconst seen = new Set();\nconst formatted = [];\n\nfor (const item of items) {\n  const link = item.json.link || item.json.url || '';\n  \n  // 重複除去\n  if (seen.has(link)) continue;\n  seen.add(link);\n  \n  formatted.push({\n    json: {\n      title: item.json.title || 'タイトルなし',\n      link: link,\n      date: item.json.pubDate || item.json.date || new Date().toISOString(),\n      summary: item.json.contentSnippet || item.json.content || item.json.description || '',\n      source: item.json.feedUrl || ''\n    }\n  });\n}\n\nreturn formatted;"
+      },
+      "id": "3d30887e-f613-4ada-8bed-f9d0586619cf",
+      "name": "整形・重複除去",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -544,
+        -48
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// sources.ymlのキーワードでフィルタリング\nconst keywords = [\n  'AI', 'エージェント', 'LLM', 'Claude', 'GPT',\n  'GitHub', 'Python', 'n8n', 'Obsidian', '自動化'\n];\n\nconst items = $input.all();\nconst filtered = items.filter(item => {\n  const text = (\n    (item.json.title || '') + ' ' +\n    (item.json.summary || '')\n  ).toLowerCase();\n  return keywords.some(kw => text.includes(kw.toLowerCase()));\n});\n\nreturn filtered.length > 0 ? filtered : items;"
+      },
+      "id": "1d0c9fb1-7511-45fc-ae1b-9e6d9460a07e",
+      "name": "キーワードフィルター",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -320,
+        -48
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Obsidian用のMarkdownを生成する\nconst items = $input.all();\nconst today = new Date().toISOString().split('T')[0];\n\nconst results = items.map((item, index) => {\n  const title = item.json.title || 'タイトルなし';\n  const link = item.json.link || '';\n  const date = item.json.date || today;\n  const summary = item.json.summary || '';\n  const source = item.json.source || '';\n  \n  const safeTitle = title\n    .replace(/[\\\\/\\:*?\"<>|]/g, '')\n    .substring(0, 50);\n  \n  const markdown = `---\\ntitle: \"${title}\"\\ndate: ${today}\\nimportance: \\ntags: []\\nrelated_people: []\\nrelated_companies: []\\nrelated_tech: []\\nsource: ${source}\\nurl: ${link}\\n---\\n\\n## 📄 要約\\n${summary}\\n\\n## 🔗 元記事\\n${link}\\n\\n## ⚡ 意外な繋がり\\n（AIが後で分析）\\n\\n## 💡 自分のメモ\\n`;\n  \n  return {\n    json: {\n      filename: `${today}_${safeTitle}.md`,\n      content: markdown,\n      title: title,\n      link: link\n    }\n  };\n});\n\nreturn results;"
+      },
+      "id": "104ac5e5-344d-4e54-8c82-d253e6eba1e4",
+      "name": "Markdown生成",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -96,
+        -48
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// 収集結果のサマリーを作成（LINE通知用）\nconst items = $input.all();\nconst today = new Date().toISOString().split('T')[0];\n\nconst summary = `📊 情報収集完了 ${today}\\n\\n収集件数: ${items.length}件\\n\\n最新記事Top3:\\n${items.slice(0, 3).map((item, i) => `${i + 1}. ${item.json.title}`).join('\\n')}\\n\\n詳細はObsidianで確認してください`;\n\nreturn [{ json: { summary, count: items.length } }];"
+      },
+      "id": "9917085a-cb88-4e03-8acd-7f8b06f5e6c4",
+      "name": "サマリー生成",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        128,
+        -48
+      ]
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -1216,
+        -48
+      ],
+      "id": "ae400abd-4902-4deb-997b-12cd3ce16d97",
+      "name": "手動トリガー"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Zenn": {
+      "main": [
+        [
+          {
+            "node": "全RSS統合",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Qiita": {
+      "main": [
+        [
+          {
+            "node": "全RSS統合",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "TechCrunch": {
+      "main": [
+        [
+          {
+            "node": "全RSS統合",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HackerNews": {
+      "main": [
+        [
+          {
+            "node": "全RSS統合",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "TheHackersNews": {
+      "main": [
+        [
+          {
+            "node": "全RSS統合",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "全RSS統合": {
+      "main": [
+        [
+          {
+            "node": "整形・重複除去",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "整形・重複除去": {
+      "main": [
+        [
+          {
+            "node": "キーワードフィルター",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "キーワードフィルター": {
+      "main": [
+        [
+          {
+            "node": "Markdown生成",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Markdown生成": {
+      "main": [
+        [
+          {
+            "node": "サマリー生成",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "手動トリガー": {
+      "main": [
+        [
+          {
+            "node": "Zenn",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Qiita",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "TechCrunch",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "HackerNews",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "TheHackersNews",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "f95f2969-54c5-4abb-b5c0-d617922cf376",
+  "meta": {
+    "instanceId": "ce03257f6916a9eb43051853d3a6c54a3d3680f934f62abce2dba4d46356aa1c"
+  },
+  "id": "tbv9YVcX6fp4ZCOG",
+  "tags": []
+}
