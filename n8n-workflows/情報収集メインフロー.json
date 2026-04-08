@@ -45,7 +45,7 @@
     },
     {
       "parameters": {
-        "url": "https://hnrss.org/frontpage",
+        "url": "https://news.ycombinator.com/rss",
         "options": {}
       },
       "id": "e5134f4a-1726-4190-a397-2db4340be292",
