@@ -1,0 +1,263 @@
+{
+  "name": "情報収集メインフロー_v3_完全版",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [-1216, -48],
+      "id": "ae400abd-4902-4deb-997b-12cd3ce16d97",
+      "name": "手動トリガー"
+    },
+    {
+      "parameters": {
+        "url": "https://zenn.dev/feed",
+        "options": {}
+      },
+      "id": "91a93c5f-4ca6-4ce1-930f-f5d0acb6d155",
+      "name": "Zenn",
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1,
+      "position": [-992, -432]
+    },
+    {
+      "parameters": {
+        "url": "https://qiita.com/popular-items/feed",
+        "options": {}
+      },
+      "id": "e62c95ce-985e-4bd5-a643-82adfaaba2e9",
+      "name": "Qiita",
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1,
+      "position": [-992, -240]
+    },
+    {
+      "parameters": {
+        "url": "https://techcrunch.com/feed/",
+        "options": {}
+      },
+      "id": "e37184ad-794e-4959-b827-8273db721e84",
+      "name": "TechCrunch",
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1,
+      "position": [-992, -48]
+    },
+    {
+      "parameters": {
+        "url": "https://hnrss.org/frontpage",
+        "options": {}
+      },
+      "id": "e5134f4a-1726-4190-a397-2db4340be292",
+      "name": "HackerNews",
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1,
+      "position": [-992, 144]
+    },
+    {
+      "parameters": {
+        "url": "https://feeds.feedburner.com/TheHackersNews",
+        "options": {}
+      },
+      "id": "6b27ea44-f309-49b0-b24a-557e0393ebcf",
+      "name": "TheHackersNews",
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1,
+      "position": [-992, 336]
+    },
+    {
+      "parameters": {
+        "mode": "multiplex",
+        "options": {}
+      },
+      "id": "25e09b4a-6e01-498e-bd29-1b5e68045ee3",
+      "name": "全RSS統合",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2,
+      "position": [-768, -48]
+    },
+    {
+      "parameters": {
+        "jsCode": "// 記事データを整形する\nconst items = $input.all();\nconst seen = new Set();\nconst formatted = [];\n\nfor (const item of items) {\n  const link = item.json.link || item.json.url || '';\n  if (seen.has(link)) continue;\n  seen.add(link);\n  formatted.push({\n    json: {\n      title: item.json.title || 'タイトルなし',\n      link: link,\n      date: item.json.pubDate || item.json.date || new Date().toISOString(),\n      summary: item.json.contentSnippet || item.json.content || item.json.description || '',\n      source: item.json.feedUrl || ''\n    }\n  });\n}\n\nreturn formatted;"
+      },
+      "id": "3d30887e-f613-4ada-8bed-f9d0586619cf",
+      "name": "整形・重複除去",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-544, -48]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ★ キーワードをここに追加するだけで検索対象が増える！\nconst keywords = [\n  'AI', 'エージェント', 'LLM', 'Claude', 'GPT',\n  'GitHub', 'Python', 'n8n', 'Obsidian', '自動化',\n  'agent', 'automation', 'machine learning'\n];\n\nconst items = $input.all();\nconst filtered = items.filter(item => {\n  const text = (\n    (item.json.title || '') + ' ' +\n    (item.json.summary || '')\n  ).toLowerCase();\n  return keywords.some(kw => text.includes(kw.toLowerCase()));\n});\n\nreturn filtered.length > 0 ? filtered : items;"
+      },
+      "id": "1d0c9fb1-7511-45fc-ae1b-9e6d9460a07e",
+      "name": "キーワードフィルター",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-320, -48]
+    },
+    {
+      "parameters": {
+        "jsCode": "// 上位10件だけClaudeに渡す（APIコスト節約）\nconst items = $input.all();\nconst top10 = items.slice(0, 10);\n\nconst articleList = top10.map((item, i) => {\n  return `【記事${i+1}】\nタイトル: ${item.json.title}\nURL: ${item.json.link}\n概要: ${(item.json.summary || '').substring(0, 200)}`;\n}).join('\\n\\n');\n\nconst prompt = `あなたは私専属のインテリジェンスアナリストです。\n\n以下の記事を分析してください：\n\n${articleList}\n\n各記事について以下を出力してください：\n重要度: A（今日必読）/ B（今週中）/ C（スキップ）\nカテゴリ: 業界ニュース/技術/人物動向/競合/論文\n要約: 30文字以内\n関連技術: （タグ形式）\n意外な繋がり: 他の記事や過去のトレンドとの関連\n\nJSON形式で出力してください。`;\n\nreturn [{ json: { prompt, articles: top10 } }];"
+      },
+      "id": "prepare-claude",
+      "name": "Claude用プロンプト準備",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-96, -48]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "={{ $env.ANTHROPIC_API_KEY }}"
+            },
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"claude-sonnet-4-20250514\",\n  \"max_tokens\": 2000,\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": {{ JSON.stringify($json.prompt) }}\n    }\n  ]\n}",
+        "options": {}
+      },
+      "id": "claude-api",
+      "name": "Claude API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [160, -48]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Claudeのレスポンスを取得\nconst response = $input.first().json;\nconst claudeText = response.content[0].text;\n\n// articlesは前のノードから取得\nconst articles = $node[\"Claude用プロンプト準備\"].json.articles || [];\nconst today = new Date().toISOString().split('T')[0];\n\n// 各記事のMarkdownを生成\nconst results = articles.map((article) => {\n  const title = article.json.title || 'タイトルなし';\n  const link = article.json.link || '';\n  const summary = (article.json.summary || '').substring(0, 300);\n  const source = article.json.source || '';\n\n  const safeTitle = title\n    .replace(/[\\\\/\\:*?\"<>|]/g, '')\n    .substring(0, 40);\n\n  const markdown = `---\ntitle: \"${title}\"\ndate: ${today}\nimportance: \ntags: []\nrelated_people: []\nrelated_companies: []\nrelated_tech: []\nsource: ${source}\nurl: ${link}\n---\n\n## 📄 要約\n${summary}\n\n## 🤖 AI分析\n${claudeText}\n\n## 🔗 元記事\n${link}\n\n## ⚡ 意外な繋がり\n（週次インサイトで自動分析）\n\n## 💡 自分のメモ\n`;\n\n  return {\n    json: {\n      filename: `${today}_${safeTitle}.md`,\n      content: markdown,\n      title: title,\n      link: link,\n      claudeAnalysis: claudeText\n    }\n  };\n});\n\nreturn results;"
+      },
+      "id": "parse-claude",
+      "name": "Claude結果をMarkdown変換",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [400, -48]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ObsidianのVaultに保存\nconst fs = require('fs');\nconst path = require('path');\n\nconst items = $input.all();\nconst vaultPath = '/obsidian/00_Inbox';\nconst savedFiles = [];\n\nfor (const item of items) {\n  const filename = item.json.filename;\n  const content = item.json.content;\n  if (!filename || !content) continue;\n\n  const filepath = path.join(vaultPath, filename);\n  try {\n    fs.writeFileSync(filepath, content, 'utf8');\n    savedFiles.push(filename);\n  } catch (e) {\n    console.error(`保存失敗: ${filename}`, e.message);\n  }\n}\n\nreturn [{\n  json: {\n    saved: savedFiles.length,\n    files: savedFiles,\n    message: `${savedFiles.length}件をObsidianに保存しました`\n  }\n}];"
+      },
+      "id": "save-obsidian",
+      "name": "Obsidianに保存",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [640, -48]
+    },
+    {
+      "parameters": {
+        "jsCode": "// LINE通知用サマリー生成\nconst result = $input.first().json;\nconst today = new Date().toISOString().split('T')[0];\n\nconst message = `📊 情報収集完了 ${today}\\n\\n✅ 保存件数: ${result.saved}件\\n\\n保存ファイル:\\n${result.files.slice(0, 3).map(f => '・' + f).join('\\n')}\\n\\n詳細はObsidianで確認してください`;\n\nreturn [{ json: { message } }];"
+      },
+      "id": "9917085a-cb88-4e03-8acd-7f8b06f5e6c4",
+      "name": "LINE通知サマリー",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [880, -48]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://notify-api.line.me/api/notify",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.LINE_TOKEN }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "message",
+              "value": "={{ $json.message }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "line-notify",
+      "name": "LINE通知",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1120, -48]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "手動トリガー": {
+      "main": [[
+        { "node": "Zenn", "type": "main", "index": 0 },
+        { "node": "Qiita", "type": "main", "index": 0 },
+        { "node": "TechCrunch", "type": "main", "index": 0 },
+        { "node": "HackerNews", "type": "main", "index": 0 },
+        { "node": "TheHackersNews", "type": "main", "index": 0 }
+      ]]
+    },
+    "Zenn": {
+      "main": [[{ "node": "全RSS統合", "type": "main", "index": 0 }]]
+    },
+    "Qiita": {
+      "main": [[{ "node": "全RSS統合", "type": "main", "index": 0 }]]
+    },
+    "TechCrunch": {
+      "main": [[{ "node": "全RSS統合", "type": "main", "index": 0 }]]
+    },
+    "HackerNews": {
+      "main": [[{ "node": "全RSS統合", "type": "main", "index": 0 }]]
+    },
+    "TheHackersNews": {
+      "main": [[{ "node": "全RSS統合", "type": "main", "index": 0 }]]
+    },
+    "全RSS統合": {
+      "main": [[{ "node": "整形・重複除去", "type": "main", "index": 0 }]]
+    },
+    "整形・重複除去": {
+      "main": [[{ "node": "キーワードフィルター", "type": "main", "index": 0 }]]
+    },
+    "キーワードフィルター": {
+      "main": [[{ "node": "Claude用プロンプト準備", "type": "main", "index": 0 }]]
+    },
+    "Claude用プロンプト準備": {
+      "main": [[{ "node": "Claude API", "type": "main", "index": 0 }]]
+    },
+    "Claude API": {
+      "main": [[{ "node": "Claude結果をMarkdown変換", "type": "main", "index": 0 }]]
+    },
+    "Claude結果をMarkdown変換": {
+      "main": [[{ "node": "Obsidianに保存", "type": "main", "index": 0 }]]
+    },
+    "Obsidianに保存": {
+      "main": [[{ "node": "LINE通知サマリー", "type": "main", "index": 0 }]]
+    },
+    "LINE通知サマリー": {
+      "main": [[{ "node": "LINE通知", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "f95f2969-54c5-4abb-b5c0-d617922cf376",
+  "meta": {
+    "instanceId": "ce03257f6916a9eb43051853d3a6c54a3d3680f934f62abce2dba4d46356aa1c"
+  },
+  "id": "tbv9YVcX6fp4ZCOG",
+  "tags": []
+}
